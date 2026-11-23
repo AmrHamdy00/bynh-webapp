@@ -17,6 +17,12 @@ export default function BlogFilter({ tags }: { tags: { name: string; count: numb
   const [all, setAll] = useState<Lite[] | null>(null);
   const active = !!term || !!tag;
 
+  // /المدونة/?q=… (also where the old WordPress search /?s=… now lands)
+  useEffect(() => {
+    const q0 = new URLSearchParams(location.search).get('q')?.trim();
+    if (q0) { setQ(q0); setTerm(q0); }
+  }, []);
+
   useEffect(() => {
     if (active && !all) fetch('/blog-index.json').then((r) => r.json()).then((d) => setAll(d.posts)).catch(() => setAll([]));
     document.getElementById('blogServer')?.toggleAttribute('hidden', active);

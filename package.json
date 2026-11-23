@@ -2,23 +2,42 @@
   "name": "bynh-web",
   "version": "1.0.0",
   "private": true,
-  "description": "bynh.sa — Next.js static site (marketing pages + WordPress blog, built to static HTML for nginx)",
+  "description": "bynh.sa — Next.js app: public site (cached HTML) + admin dashboard (admin.bynh.sa) on PostgreSQL",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "npx serve out",
-    "typecheck": "tsc --noEmit"
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "import:wp": "tsx scripts/import-wp.ts",
+    "admin:create": "tsx scripts/create-admin.ts",
+    "seo:snapshot": "node scripts/seo/snapshot.mjs",
+    "seo:compare": "node scripts/seo/compare.mjs"
   },
   "dependencies": {
+    "@node-rs/argon2": "^2.0.2",
+    "drizzle-orm": "^0.44.5",
     "gsap": "3.12.5",
     "next": "15.5.29",
+    "otplib": "^12.0.1",
+    "postgres": "^3.4.7",
+    "qrcode": "^1.5.4",
     "react": "19.1.1",
-    "react-dom": "19.1.1"
+    "react-dom": "19.1.1",
+    "sanitize-html": "^2.17.0",
+    "server-only": "^0.0.1",
+    "sharp": "^0.34.3",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "22.15.3",
+    "@types/qrcode": "^1.5.5",
     "@types/react": "19.1.12",
     "@types/react-dom": "19.1.9",
+    "@types/sanitize-html": "^2.16.0",
+    "drizzle-kit": "^0.31.4",
+    "tsx": "^4.20.5",
     "typescript": "5.8.3"
   }
 }

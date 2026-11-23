@@ -1,4 +1,4 @@
-import type { Post } from '@/lib/wp';
+import type { PostLite as Post } from '@/lib/posts';
 
 export const postHref = (slug: string) => `/${slug}/`;
 

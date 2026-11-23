@@ -1,4 +1,6 @@
-import { getAllPosts, withToc, SITE_URL, type Post } from '@/lib/wp';
+import { getAllPosts, type Post, type PostLite } from '@/lib/posts';
+import { withToc, SITE_URL, encPath, postPath, decodeEntities, stripTags } from '@/lib/content';
+import { postJsonLd } from '@/lib/post-meta';
 import PostCard from './PostCard';
 import Shell from './Shell';
 import { BLOG } from './BlogList';
@@ -6,29 +8,32 @@ import { BLOG } from './BlogList';
 /** A WordPress post rendered at its original address: bynh.sa/<arabic-slug>/ */
 export default async function Article({ post }: { post: Post }) {
   const all = await getAllPosts();
-  // the WordPress body repeats the post title as its own <h1>; the page already has one
-  const body = post.content.replace(/^([\s\S]{0,800}?)<h1[^>]*>[\s\S]*?<\/h1>/, '$1');
+  // the WordPress body carries its own <h1> (often worded differently from the title) — show it as the page h1, once
+  let h1 = post.title;
+  const body = post.content.replace(/^([\s\S]{0,800}?)<h1[^>]*>([\s\S]*?)<\/h1>/, (_m, before: string, inner: string) => {
+    const t = decodeEntities(stripTags(inner));
+    if (t) h1 = t;
+    return before;
+  });
   const { html, toc } = withToc(body);
   // many posts open with their own cover image inside the content; don't show it twice
   const coverBase = post.image ? post.image.split('/').pop()!.replace(/-\d+x\d+(?=\.\w+$)/, '').replace(/\.\w+$/, '') : '';
   const coverInContent = !!coverBase && post.content.slice(0, 1500).includes(coverBase);
-  const shared = (p: Post) => p.tags.filter((t) => post.tags.includes(t)).length;
+  const shared = (p: PostLite) => p.tags.filter((t) => post.tags.includes(t)).length;
   const related = all.filter((p) => p.id !== post.id).slice(0, 60).sort((a, b) => shared(b) - shared(a)).slice(0, 3);
-  const url = encodeURIComponent(`${SITE_URL}/${encodeURI(post.slug)}/`);
+  const url = encodeURIComponent(SITE_URL + encPath(postPath(post.slug)));
   const share = [['X', `https://x.com/intent/tweet?url=${url}`], ['Facebook', `https://www.facebook.com/sharer/sharer.php?u=${url}`],
     ['LinkedIn', `https://www.linkedin.com/sharing/share-offsite/?url=${url}`], ['WhatsApp', `https://wa.me/?text=${url}`]];
-  const ld = { '@context': 'https://schema.org', '@type': 'Article', headline: post.title, datePublished: post.date, image: post.image || undefined,
-    author: { '@type': 'Organization', name: 'فريق بينه' }, publisher: { '@type': 'Organization', name: 'بينه', logo: { '@type': 'ImageObject', url: `${SITE_URL}/img/mark.png` } },
-    mainEntityOfPage: `${SITE_URL}/${encodeURI(post.slug)}/` };
+  const ld = postJsonLd(post);
 
   return (
     <Shell current={BLOG}>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld).replace(/</g, '\\u003c') }} />
       <section className="ahero">
         <div className="wrap">
           <nav className="crumbs" aria-label="مسار التنقل"><a href="/">الرئيسية</a><span>/</span><a href={BLOG}>المدونة</a><span>/</span><span>{post.title}</span></nav>
-          <h1>{post.title}</h1>
-          <div className="ameta"><time dateTime={post.date}>{post.date}</time><span className="dt"></span>بواسطة فريق بينه</div>
+          <h1>{h1}</h1>
+          <div className="ameta"><time dateTime={post.date}>{post.date}</time><span className="dt"></span>بواسطة {post.authorName}</div>
           <div className="atags">{post.tags.map((t) => <span className="tchip" key={t}>{t}</span>)}</div>
           {post.image && !coverInContent && <div className="aimg"><img src={post.image} alt="" /></div>}
         </div>

@@ -7,3 +7,6 @@ next-env.d.ts
 .env.production
 .last-build-state
 __pycache__/
+storage/
+seo/local.json
+seo/report.html

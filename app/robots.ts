@@ -1,8 +1,6 @@
 import type { MetadataRoute } from 'next';
-import { SITE_URL } from '@/lib/wp';
-
-export const dynamic = 'force-static';
+import { SITE_URL } from '@/lib/content';
 
 export default function robots(): MetadataRoute.Robots {
-  return { rules: [{ userAgent: '*', allow: '/' }], sitemap: `${SITE_URL}/sitemap.xml` };
+  return { rules: [{ userAgent: '*', allow: '/', disallow: ['/wp-admin/', '/api/'] }], sitemap: `${SITE_URL}/sitemap_index.xml` };
 }

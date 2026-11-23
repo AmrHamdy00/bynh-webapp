@@ -6,6 +6,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import Shell from '@/components/Shell';
+import PageJsonLd from '@/components/PageJsonLd';
 import BlogList from '@/components/BlogList';
 import Article from '@/components/Article';
 import ConsultationsPage from '@/components/pages/ConsultationsPage';
@@ -13,7 +14,8 @@ import ServicesPage from '@/components/pages/ServicesPage';
 import LawyersPage from '@/components/pages/LawyersPage';
 import FaqPage from '@/components/pages/FaqPage';
 import RegisterPage from '@/components/pages/RegisterPage';
-import { getAllPosts, getPost, publicUrl, SITE_URL } from '@/lib/wp';
+import { getPost } from '@/lib/posts';
+import { postMetadata } from '@/lib/post-meta';
 import { pageMeta, type PagePath } from '@/lib/seo';
 
 const STATIC: Record<string, { path: PagePath; nav?: string; render: () => React.ReactNode }> = {
@@ -25,11 +27,10 @@ const STATIC: Record<string, { path: PagePath; nav?: string; render: () => React
 };
 const BLOG_SLUG = 'المدونة';
 
-export const dynamicParams = false;
-
+// Marketing pages are built ahead; posts render on first request and stay cached until the admin publishes a change.
+export const dynamicParams = true;
 export async function generateStaticParams() {
-  const posts = await getAllPosts();
-  return [...Object.keys(STATIC), BLOG_SLUG, ...posts.map((p) => p.slug)].map((slug) => ({ slug }));
+  return Object.keys(STATIC).map((slug) => ({ slug }));
 }
 
 type Props = { params: Promise<{ slug: string }> };
@@ -40,23 +41,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (STATIC[slug]) return pageMeta(STATIC[slug].path);
   if (slug === BLOG_SLUG) return pageMeta('/المدونة/');
   const post = await getPost(slug);
-  if (!post) return {};
-  const y = post.seo;
-  const url = `${SITE_URL}/${encodeURI(post.slug)}/`;
-  return {
-    title: { absolute: y.title || `${post.title} - بينه` },
-    description: y.description || post.excerpt,
-    alternates: { canonical: publicUrl(y.canonical) || url },
-    openGraph: { type: 'article', url, title: y.og_title || post.title, description: y.og_description || y.description || post.excerpt,
-      siteName: 'بينه', locale: 'ar_SA', publishedTime: post.date, images: post.image ? [post.image] : y.og_image?.map((i) => i.url) },
-    twitter: { card: 'summary_large_image', site: '@bynh_sa' },
-  };
+  return post ? postMetadata(post) : {};
 }
 
 export default async function Page({ params }: Props) {
   const slug = await slugOf(params);
   const st = STATIC[slug];
-  if (st) return <Shell current={st.nav}>{st.render()}</Shell>;
+  if (st) return <Shell current={st.nav}><PageJsonLd path={st.path} />{st.render()}</Shell>;
   if (slug === BLOG_SLUG) return <BlogList page={1} />;
   const post = await getPost(slug);
   if (!post) notFound();

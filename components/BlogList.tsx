@@ -1,7 +1,8 @@
-import { getAllPosts, getTags, PER_PAGE } from '@/lib/wp';
+import { getAllPosts, getTags, PER_PAGE } from '@/lib/posts';
 import PostCard, { postHref } from './PostCard';
 import BlogFilter from './BlogFilter';
 import Shell from './Shell';
+import PageJsonLd from './PageJsonLd';
 
 export const BLOG = '/المدونة/';
 const pageHref = (n: number) => (n === 1 ? BLOG : `${BLOG}page/${n}/`);
@@ -17,6 +18,7 @@ export default async function BlogList({ page }: { page: number }) {
 
   return (
     <Shell current={BLOG}>
+      <PageJsonLd path="/المدونة/" />
       <section className="bhero">
         <div className="wrap">
           <nav className="crumbs" aria-label="مسار التنقل"><a href="/">الرئيسية</a><span>/</span><span>المدونة</span>{page > 1 && <><span>/</span><span>صفحة {page}</span></>}</nav>

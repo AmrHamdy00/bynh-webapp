@@ -1,5 +1,12 @@
+import 'server-only';
 import type { Metadata } from 'next';
-import { SITE_URL } from './wp';
+import { unstable_cache } from 'next/cache';
+import { eq } from 'drizzle-orm';
+import { db, schema } from './db';
+import { SITE_URL, absUrl, absJson, DEFAULT_ROBOTS } from './content';
+import { robotsObj } from './post-meta';
+
+export const PAGES_TAG = 'pages';
 
 /** Titles and descriptions carried over verbatim from the current WordPress/Yoast setup (keeps search rankings). */
 export const PAGES = {
@@ -18,15 +25,43 @@ export const PAGES = {
 } as const;
 export type PagePath = keyof typeof PAGES;
 
-export function pageMeta(path: PagePath, extra?: { title?: string }): Metadata {
+const pageRow = unstable_cache(async (path: string) => {
+  const [r] = await db.select().from(schema.pageSeo).where(eq(schema.pageSeo.path, path)).limit(1);
+  return r ? { ...r, publishedAt: r.publishedAt?.toISOString() ?? null, modifiedAt: r.modifiedAt.toISOString() } : null;
+}, ['page-seo'], { tags: [PAGES_TAG], revalidate: 3600 });
+
+const iso = (d?: string | null) => (d ? d.replace(/\.\d{3}Z$/, '+00:00') : undefined);
+
+/**
+ * Metadata for a coded page: the Yoast data imported from WordPress (editable in the admin), falling back to the
+ * constants above. Mirrors what WordPress printed: robots, canonical, og:type article, modified time, Twitter.
+ */
+export async function pageMeta(path: PagePath, extra?: { title?: string }): Promise<Metadata> {
+  const row = await pageRow(path).catch(() => null);
+  const y = row?.seo || {};
   const p = PAGES[path];
-  const title = extra?.title || p.title;
+  const title = extra?.title || y.title || p.title;
+  const description = y.description || p.description;
   const url = `${SITE_URL}${encodeURI(path)}`;
+  const img = y.ogImage;
   return {
     title: { absolute: title },
-    description: p.description,
-    alternates: { canonical: url },
-    openGraph: { title, description: p.description, url, siteName: 'بينه', locale: 'ar_SA', type: 'website', images: [`${SITE_URL}/img/Header1.webp`] },
-    twitter: { card: 'summary_large_image', site: '@bynh_sa' },
+    description,
+    robots: robotsObj(y.robots || DEFAULT_ROBOTS),
+    alternates: { canonical: absUrl(y.canonical) || url },
+    openGraph: {
+      locale: 'ar_AR', type: (path === '/' || row?.ogType === 'website' ? 'website' : 'article'), title: extra?.title || y.ogTitle || title,
+      description: y.ogDescription || description, url, siteName: 'بينه',
+      ...(path !== '/' && row?.ogType !== 'website' && row ? { modifiedTime: iso(row.modifiedAt) } : {}),
+      images: img ? [{ url: absUrl(img.url)!, width: img.width, height: img.height, type: img.type }] : [`${SITE_URL}/img/Header1.webp`],
+    },
+    twitter: { card: 'summary_large_image', site: '@bynh_sa', creator: '@bynh_sa' },
+    other: { 'article:publisher': 'https://www.facebook.com/bynh.sa' },
   };
+}
+
+/** JSON-LD of a coded page: the imported Yoast graph (URLs on SITE_URL). */
+export async function pageJsonLd(path: PagePath) {
+  const row = await pageRow(path).catch(() => null);
+  return row?.schema ? absJson(row.schema) : null;
 }

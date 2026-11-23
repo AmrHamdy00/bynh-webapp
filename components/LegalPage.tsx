@@ -1,13 +1,16 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { withToc } from '@/lib/wp';
+import { withToc } from '@/lib/content';
 import Shell from './Shell';
+import PageJsonLd from './PageJsonLd';
+import type { PagePath } from '@/lib/seo';
 
 /** Legal documents (privacy, terms, provider agreement) — text verbatim from bynh.sa, kept in content/legal/*.html. */
-export default function LegalPage({ file, title, crumb }: { file: string; title: string; crumb: string }) {
+export default function LegalPage({ file, title, crumb, path }: { file: string; title: string; crumb: string; path: PagePath }) {
   const { html, toc } = withToc(readFileSync(join(process.cwd(), 'content/legal', file), 'utf8'));
   return (
     <Shell>
+      <PageJsonLd path={path} />
       <section className="phero">
         <div className="wrap">
           <nav className="crumbs" aria-label="مسار التنقل"><a href="/">الرئيسية</a><span>/</span><span>{crumb}</span></nav>

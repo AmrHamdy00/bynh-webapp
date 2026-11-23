@@ -1,7 +1,12 @@
+import Icons from '@/components/Icons';
+import Behaviors from '@/components/Behaviors';
+import './globals.css';
 import Shell from '@/components/Shell';
 
 export default function NotFound() {
   return (
+    <>
+    <Icons />
     <Shell>
       <section className="phero" style={{ paddingBlock: 'clamp(80px,10vw,140px)' }}>
         <div className="wrap">
@@ -14,5 +19,7 @@ export default function NotFound() {
         </div>
       </section>
     </Shell>
+    <Behaviors />
+    </>
   );
 }

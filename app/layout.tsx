@@ -1,9 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { IBM_Plex_Sans_Arabic } from 'next/font/google';
-import Icons from '@/components/Icons';
-import Behaviors from '@/components/Behaviors';
-import { SITE_URL } from '@/lib/wp';
-import './globals.css';
+import { SITE_URL } from '@/lib/content';
 
 // Self-hosted at build time by next/font (no runtime call to Google).
 const plex = IBM_Plex_Sans_Arabic({ subsets: ['arabic', 'latin'], weight: ['400', '500', '600', '700'], display: 'swap', variable: '--plex' });
@@ -14,14 +11,11 @@ export const metadata: Metadata = {
 };
 export const viewport: Viewport = { width: 'device-width', initialScale: 1, viewportFit: 'cover', themeColor: '#083A51' };
 
+/** Shared root: font, language and direction. The public site and the admin each add their own chrome. */
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ar" dir="rtl" className={plex.variable}>
-      <body>
-        <Icons />
-        {children}
-        <Behaviors />
-      </body>
+      <body>{children}</body>
     </html>
   );
 }
