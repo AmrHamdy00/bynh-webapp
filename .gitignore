@@ -10,3 +10,4 @@ __pycache__/
 storage/
 seo/local.json
 seo/report.html
+seo/staging.json
