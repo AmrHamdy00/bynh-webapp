@@ -39,9 +39,9 @@ export async function savePostAction(_: FormState, form: FormData): Promise<Form
   if (publishedAt && isNaN(+publishedAt)) return { error: 'تاريخ النشر غير صالح.' };
   if (status === 'scheduled' && (!publishedAt || publishedAt <= new Date())) return { error: 'اختر وقتاً مستقبلياً للجدولة.' };
 
-  const rawContent = String(form.get('content') || '').slice(0, 2_000_000);
+  const rawContent = String(form.get('content') || '').replace(/\r\n?/g, '\n').slice(0, 2_000_000); // browsers send CRLF
   const excerpt = cleanText(form.get('excerpt'), 600);
-  const seo: Seo = {
+  const seoForm: Seo = {
     title: cleanText(form.get('seoTitle'), 200) || undefined,
     description: cleanText(form.get('seoDescription'), 400) || undefined,
     canonical: cleanText(form.get('seoCanonical'), 500) || undefined,
@@ -50,7 +50,6 @@ export async function savePostAction(_: FormState, form: FormData): Promise<Form
     ogDescription: cleanText(form.get('ogDescription'), 400) || undefined,
     focusKeyword: cleanText(form.get('focusKeyword'), 100) || undefined,
   };
-  if (seo.canonical && !/^(\/|https:\/\/)/.test(seo.canonical)) return { error: 'الرابط القانوني يجب أن يبدأ بـ / أو https://' };
   const coverMediaId = Number(form.get('coverMediaId')) || null;
   const tagIds = form.getAll('tags').map(Number).filter(Boolean);
   const categoryIds = form.getAll('categories').map(Number).filter(Boolean);
@@ -70,16 +69,35 @@ export async function savePostAction(_: FormState, form: FormData): Promise<Form
   const content = old && rawContent === old.content ? old.content : sanitizePostHtml(rawContent);
 
   // publishing keeps the original date of an existing post (changing it would look like new content to Google)
+  // fields the form doesn't show (imported OG image, Twitter fields, full robots string) are kept
+  const prevSeo: Seo = old?.seo || {};
+  const seo: Seo = Object.fromEntries(Object.entries({
+    ...prevSeo, ...seoForm,
+    robots: seoForm.robots ?? (prevSeo.robots && !prevSeo.robots.includes('noindex') ? prevSeo.robots : undefined),
+  }).filter(([, v]) => v !== undefined && v !== '')) as Seo;
+  if (seo.canonical && !/^(\/|https:\/\/)/.test(seo.canonical)) return { error: 'الرابط القانوني يجب أن يبدأ بـ / أو https://' };
+
+  // the form only has minute precision: same minute as stored → keep the exact stored timestamp
+  if (old?.publishedAt && publishedAt && Math.floor(+old.publishedAt / 60000) === Math.floor(+publishedAt / 60000)) publishedAt = old.publishedAt;
   if (status === 'published') {
     const now = new Date();
     publishedAt = publishedAt && publishedAt <= now ? publishedAt : old?.publishedAt && old.publishedAt <= now ? old.publishedAt : now;
   }
 
+  const finalPublished = status === 'draft' ? old?.publishedAt ?? null : publishedAt;
+  // nothing changed → keep modified date and the imported JSON-LD exactly as they are
+  const norm = (o: Seo) => JSON.stringify(Object.entries(o).map(([k, v]) => [k, typeof v === 'string' ? cleanText(v, 500) : v]).sort());
+  const unchanged = !!old && old.content === content && cleanText(old.title, 200) === title && old.slug === slug && cleanText(old.excerpt, 600) === excerpt
+    && old.status === status && old.coverMediaId === coverMediaId && +(old.publishedAt ?? 0) === +(finalPublished ?? 0)
+    && norm(prevSeo) === norm(seo);
+  const modifiedAt = unchanged ? old!.modifiedAt : new Date();
+  // the imported Yoast graph is kept while the article text/title/address are the same (dates refreshed);
+  // after a real edit it is generated from the current data in the same shape
+  const keepSchema = !!old?.schema && old.content === content && cleanText(old.title, 200) === title && old.slug === slug;
   const values = {
-    title, slug, status, content, excerpt, seo, coverMediaId, publishedAt: status === 'draft' ? old?.publishedAt ?? null : publishedAt,
-    readingMinutes: readingMinutes(content), modifiedAt: new Date(),
-    // once edited, the JSON-LD is generated from the current data instead of the imported Yoast copy
-    schema: old && old.content === content && old.title === title && old.slug === slug ? old.schema : null,
+    title: unchanged ? old!.title : title, slug, status, content, excerpt: unchanged ? old!.excerpt : excerpt, seo: unchanged ? old!.seo : seo, coverMediaId, publishedAt: finalPublished,
+    readingMinutes: unchanged ? old!.readingMinutes : readingMinutes(content), modifiedAt,
+    schema: keepSchema ? JSON.parse(JSON.stringify(old!.schema).replace(/"dateModified":"[^"]*"/g, `"dateModified":"${modifiedAt.toISOString().replace(/\.\d{3}Z$/, '+00:00')}"`)) : null,
   };
 
   const postId = await db.transaction(async (tx) => {

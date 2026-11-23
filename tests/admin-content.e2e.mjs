@@ -50,6 +50,7 @@ await new Promise((r) => setTimeout(r, 500));
 const after = await (await get(`/${slugOld}/`)).text();
 const art = (h) => (h.match(/<article class="prose"[\s\S]*?<\/article>/) || [''])[0];
 ok(art(before) && art(before) === art(after), 'saving an untouched imported post keeps its HTML identical');
+if (art(before) !== art(after) && process.env.SHOTS) { writeFileSync(`${process.env.SHOTS}/before.html`, art(before)); writeFileSync(`${process.env.SHOTS}/after.html`, art(after)); }
 
 // new post with uploaded cover
 const png = '/tmp/bynh-e2e.png';

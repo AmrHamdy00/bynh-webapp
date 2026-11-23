@@ -1,5 +1,6 @@
 import Icons from '@/components/Icons';
 import Behaviors from '@/components/Behaviors';
+import Tracker from '@/components/Tracker';
 import './globals.css';
 import Shell from '@/components/Shell';
 
@@ -8,7 +9,7 @@ export default function NotFound() {
     <>
     <Icons />
     <Shell>
-      <section className="phero" style={{ paddingBlock: 'clamp(80px,10vw,140px)' }}>
+      <section className="phero" data-notfound style={{ paddingBlock: 'clamp(80px,10vw,140px)' }}>
         <div className="wrap">
           <h1 className="h1">404</h1>
           <p className="sub">الصفحة غير موجودة.</p>
@@ -20,6 +21,7 @@ export default function NotFound() {
       </section>
     </Shell>
     <Behaviors />
+    <Tracker notFound />
     </>
   );
 }

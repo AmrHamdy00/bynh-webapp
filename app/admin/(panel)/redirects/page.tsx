@@ -6,9 +6,10 @@ import { saveRedirectAction, deleteRedirectAction } from './actions';
 
 export const metadata = { title: 'التحويلات' };
 
-export default async function Redirects({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+export default async function Redirects({ searchParams }: { searchParams: Promise<{ q?: string; from?: string }> }) {
   await requireUser('editor');
-  const q = ((await searchParams).q || '').trim().slice(0, 100);
+  const sp = await searchParams;
+  const q = (sp.q || '').trim().slice(0, 100);
   const rows = await db.select().from(s.redirects).where(q ? or(ilike(s.redirects.fromPath, `%${q}%`), ilike(s.redirects.toPath, `%${q}%`)) : undefined).orderBy(desc(s.redirects.createdAt)).limit(500);
   return (
     <>
@@ -16,7 +17,7 @@ export default async function Redirects({ searchParams }: { searchParams: Promis
       <p className="muted small" style={{ marginBottom: 14 }}>301 = نقل دائم (ينقل قوة الرابط في جوجل). 302 = مؤقت. 410 = محذوف نهائياً. تُضاف تحويلات تلقائياً عند تغيير رابط مقال منشور أو حذفه.</p>
       <section className="card" style={{ marginBottom: 14 }}>
         <ActionForm action={saveRedirectAction} className="grid g4">
-          <div className="field"><label htmlFor="f">من</label><input className="in" id="f" name="from" placeholder="/الرابط-القديم/" required /></div>
+          <div className="field"><label htmlFor="f">من</label><input className="in" id="f" name="from" placeholder="/الرابط-القديم/" defaultValue={sp.from || ''} required /></div>
           <div className="field"><label htmlFor="t">إلى</label><input className="in" id="t" name="to" placeholder="/الرابط-الجديد/ أو https://…" /></div>
           <div className="field"><label htmlFor="c">النوع</label><select className="sel" id="c" name="code" defaultValue="301"><option value="301">301 دائم</option><option value="302">302 مؤقت</option><option value="410">410 محذوف</option></select></div>
           <div className="field"><label>&nbsp;</label><Submit className="btn btn-p">إضافة / تحديث</Submit></div>

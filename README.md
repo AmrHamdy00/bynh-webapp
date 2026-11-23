@@ -1,68 +1,105 @@
-# bynh.sa — Next.js static site
+# bynh.sa — website + admin dashboard
 
-The new bynh.sa: a Next.js 15 app exported to plain static files (`next build` → `out/`) and served by nginx.
-WordPress stays only as the blog's content back office (headless, at `cms.bynh.sa`).
+One Next.js 15 app on Node, PostgreSQL, behind nginx. It replaces WordPress completely.
 
 ```
-            build time (scripts/deploy.sh)                       request time
-WordPress ──REST API──▶ next build ──▶ out/ (static HTML) ──▶ nginx ──▶ visitor
-cms.bynh.sa/wp-json                                            │
-cms.bynh.sa/wp-content  ◀──────────── proxied by nginx ────────┘ (post images)
+visitor ──▶ nginx ──▶ Next.js (127.0.0.1:3000) ──▶ PostgreSQL
+            │  bynh.sa        public pages: pre-rendered + cached HTML (fast as static, same URLs as WordPress)
+            │  admin.bynh.sa  dashboard: posts, media, SEO, redirects, analytics, funnels, leads, users
+            └─ /wp-content/uploads/ served from disk (the 33k files imported from WordPress, same paths)
 ```
 
-## What is in the build
-
-| URL (unchanged from today) | Source |
-|---|---|
-| `/` | `app/page.tsx` → `components/pages/HomePage.tsx` (latest 3 posts from WordPress) |
-| `/about-us/`, `/contact-us/` | `app/about-us`, `app/contact-us` |
-| `/استشارات-قانونية/`, `/خدمات-قانونية/`, `/طلب-تسجيل-محامي/`, `/الأسئلة-الشائعة/`, `/التسجيل/` | `app/[slug]/page.tsx` (static map) |
-| `/المدونة/`, `/المدونة/page/N/` | `components/BlogList.tsx` — all posts, 9 per page |
-| `/<post-slug>/` (all 456 posts, at the site root like WordPress) | `app/[slug]/page.tsx` → `components/Article.tsx` |
-| `/privacy-policy/`, `/terms-and-conditions/`, `/service-provider-agreement/` | `content/legal/*.html` (verbatim legal text) |
-| `/sitemap.xml`, `/robots.txt`, `/blog-index.json` | generated at build (index feeds blog search + tag filter) |
-
-SEO titles/descriptions of the marketing pages are carried over from Yoast (`lib/seo.ts`); posts use their own
-`yoast_head_json` from the API, with canonical URLs forced to `https://bynh.sa`.
-
-All copy is verbatim from the current site. Pages removed on purpose (redirected in nginx): `/training/` (empty),
-`/landing/` (old copy of the home page — its 4 extra reviews moved to the new home page), `/soon/`, `/my-account/`, `/checkout/`.
-
-## Develop
+## Run it locally
 
 ```bash
-cp .env.example .env.local      # set WP_API_URL and WP_MEDIA_ORIGIN (see comments)
+docker compose up -d db                      # PostgreSQL 16 on 127.0.0.1:5432 (or use your own)
+cp .env.example .env.local                   # then set APP_SECRET:  openssl rand -base64 48
+                                             #           PUBLIC_ORIGIN=http://localhost:3000
 npm install
-npm run dev                     # http://localhost:3000
-npm run build                   # writes ./out
-npx serve out                   # preview the static export
+npm run db:migrate                           # create tables
+npm run import:wp                            # copy posts, SEO, pages SEO and all media from bynh.sa (~5 GB, re-runnable)
+npm run admin:create -- yourname "Your Name" admin   # prints a one-time password
+npm run build && npm start                   # production mode (or: npm run dev)
 ```
 
-Node 20+ (tested on Node 22). Interactivity (menu, FAQ, form, scroll motion) lives in `components/Behaviors.tsx`;
-the blog search is `components/BlogFilter.tsx`. Design tokens and styles: `app/globals.css`.
+- Public site: http://localhost:3000
+- Dashboard: **http://admin.localhost:3000** (browsers resolve `*.localhost` to your machine). First sign-in asks you to scan a QR code with an
+  authenticator app (Google/Microsoft Authenticator, Authy…), shows 10 recovery codes once, then asks for a new password.
 
-## Deploy on the nginx server
+## Prove SEO is preserved (run before going live)
 
-1. Put the repo at e.g. `/opt/bynh-web`, create `.env.production` from `.env.example`.
-2. Install the site config: `deploy/nginx.conf` → `/etc/nginx/sites-available/bynh.sa` (UTF-8), enable it, `nginx -t && systemctl reload nginx`.
-3. First release: `scripts/deploy.sh` (builds, copies to `/var/www/bynh/releases/<time>`, flips `/var/www/bynh/current`).
-   Roll back by pointing `current` at an older release.
+```bash
+npm run seo:snapshot -- --base https://bynh.sa --out seo/baseline.json          # what Google sees today (already in the repo)
+npm run seo:snapshot -- --base http://localhost:3000 --urls seo/baseline.json --out seo/local.json
+npm run seo:compare -- seo/baseline.json seo/local.json --html seo/report.html  # exit code 1 if anything blocking
+```
 
-### Keeping the blog fresh
+Checks every old URL (489: posts, pages, blog pages, tag/category/author archives, feed, sitemaps): status, title, description,
+canonical, robots, Open Graph, article dates, h1 and JSON-LD types. Current result: **0 blocking differences**; the 20 warnings are
+intended (redesigned h1s on a few pages, /training/ → 301, article dates Yoast didn't print).
 
-New or edited posts appear after a rebuild (~1–2 min). Pick one:
-- **Cron (no WordPress changes):** `*/10 * * * * /opt/bynh-web/scripts/rebuild-if-changed.sh` — rebuilds only when the post count or latest modified date changed.
-- **Instant:** a publish hook in WordPress (e.g. the "WP Webhooks" plugin, or a small `save_post` snippet) that calls an endpoint on the server which runs `scripts/rebuild-if-changed.sh`.
+What keeps rankings:
+- every post at the same `/<arabic-slug>/`, same publish date, Yoast title/description/canonical/robots/OG/Twitter and the original
+  Yoast JSON-LD graph (regenerated in the same shape once a post is edited);
+- `/sitemap_index.xml`, `/post-sitemap.xml`, `/page-sitemap.xml` (with images) and `/feed/` at their WordPress addresses;
+- tag/category/author archives (all `noindex` on WordPress) → 301 to the blog; `/?s=` → blog search; `/?p=ID` → the post;
+  `/wp-admin`, `*.php` → 410; dropped pages → 301 (managed in the dashboard under «التحويلات»);
+- changing a live post's address, or deleting it, adds a 301 automatically; the 404 report lists broken URLs to redirect.
 
-## WordPress switch-over checklist
+## End-to-end tests (need a running server and a fresh account each)
 
-1. Move WordPress to `cms.bynh.sa` (Settings → WordPress Address & Site Address), keep the same database.
-2. On the CMS host, redirect its public front end to `https://bynh.sa` (allow `/wp-admin`, `/wp-login.php`, `/wp-json`, `/wp-content`), and set it to *discourage search engines*.
-3. Set `WP_API_URL=https://cms.bynh.sa/wp-json/wp/v2`, deploy, point `bynh.sa` DNS at the nginx server.
-4. Verify: a few old post URLs, `/wp-content/uploads/...` images, `/sitemap.xml` (submit it in Search Console).
+```bash
+npm run admin:create -- t1 "Test" admin    && ADMIN_USER=t1 ADMIN_PASS='…' node tests/admin-auth.e2e.mjs
+npm run admin:create -- t2 "Test" editor   && ADMIN_USER=t2 ADMIN_PASS='…' node tests/admin-content.e2e.mjs
+npm run admin:create -- t3 "Test" editor   && ADMIN_USER=t3 ADMIN_PASS='…' node tests/analytics.e2e.mjs
+```
+(Repeated failed logins trip the rate limiter by design; locally clear it with `delete from login_attempts`.)
 
-## Open items
+## Security
 
-- Registration form (`/التسجيل/`) validates and confirms on the page; it needs a destination (email/CRM/API) — it was an Enfold form before.
-- Lawyer sign-up keeps pointing to `https://lawyers.bynh.app/register/step-one`; app download to `https://bynh.go.link/1mPkZ`.
-- Hero avatars are licensed stock photos (Unsplash License) used decoratively; replace with real customer/lawyer photos when available.
+| Layer | What |
+|---|---|
+| Sign-in | argon2id passwords (12+ chars, policy), **mandatory authenticator app** (TOTP, replay-proof), 10 hashed single-use recovery codes |
+| Sessions | 256-bit tokens, only SHA-256 stored; `__Host-` HttpOnly Secure SameSite=Strict cookie on admin.bynh.sa only; 30 min idle / 12 h max; new token after each step; password change signs out everywhere |
+| Brute force | per-IP and per-account limits, escalating account lock, nginx `limit_req` on the login page, uniform error messages and timing |
+| Isolation | admin only on `admin.bynh.sa` (404 on the public host), noindex, `frame-ancestors 'none'`, strict nonce-based CSP, optional IP allow-list (env or nginx) |
+| Roles | admin (everything) · editor (all content, SEO, redirects, leads) · author (own drafts only) |
+| Content | every saved article body passes an HTML allow-list (no scripts, event handlers, `javascript:` links); untouched imported HTML is kept byte-for-byte |
+| Uploads | type detected from bytes, images decoded and re-encoded (EXIF/GPS and hidden payloads dropped), SVG/HTML refused, 10 MB cap, nginx never executes anything in uploads |
+| Forms/API | same-origin checks (CSRF), honeypot + rate limits on the registration form, CSV export protected against formula injection |
+| Audit | every sign-in, failure, lock, publish, delete, role change, export is logged with time and IP («سجل النشاط») |
+| Secrets | `APP_SECRET` encrypts authenticator secrets (AES-256-GCM); app refuses to start in production without it |
+
+## Analytics (first-party, no cookies)
+
+`components/Tracker.tsx` (~2 KB) → `/api/collect/` → `events` table. Pageviews, sources/UTM, devices, countries (if nginx passes
+GeoIP), reading depth and completion per article, engaged time, clicks (app download, WhatsApp, client login, lawyer sign-up, phone,
+outbound), registration conversions, 404s, and funnels. Visitors are counted with a daily-rotating salted hash — no cookie, no raw IP
+stored, Do-Not-Track/GPC honoured.
+
+## Deploy on the server
+
+1. Install Node 22, PostgreSQL 16, nginx. Create user `bynh`, clone to `/opt/bynh-web`, uploads dir `/var/lib/bynh/uploads`
+   (copy `storage/uploads/` there, or run `npm run import:wp` on the server with `UPLOAD_DIR` set).
+2. `.env.production` from `.env.example` (`TRUST_PROXY=1`, real `APP_SECRET`, `DATABASE_URL`, `UPLOAD_DIR`).
+3. `npm ci && npm run db:migrate && npm run build`, then `deploy/bynh-web.service` → `/etc/systemd/system/`, `systemctl enable --now bynh-web`.
+4. `deploy/nginx.conf` → nginx sites, certificate for `bynh.sa`, `www.bynh.sa`, `admin.bynh.sa`; `nginx -t && systemctl reload nginx`.
+5. `npm run admin:create -- <you> "<name>" admin`, sign in at https://admin.bynh.sa and enrol your authenticator.
+6. Run the SEO compare against the server before switching DNS; afterwards submit `/sitemap_index.xml` in Search Console and watch
+   «روابط مكسورة» daily for a few weeks.
+7. Updates: `scripts/deploy.sh`. Backups: `scripts/backup.sh` nightly (database + uploads).
+
+## Code map
+
+| Path | What |
+|---|---|
+| `app/(site)/` | public pages (home, marketing pages, blog, posts at `/<slug>/`, signed draft preview) |
+| `app/admin/` | dashboard (login, 2FA, posts, media, SEO, redirects, analytics, funnels, leads, users, audit) |
+| `app/api/` | `collect` (analytics), `forms/register`, `admin/*` (media upload, logout, session, CSV) |
+| `app/*.xml`, `app/feed` | Yoast-compatible sitemaps and RSS |
+| `middleware.ts` | admin host isolation + CSP, WordPress legacy URLs, managed redirects |
+| `lib/db/schema.ts` | database schema (Drizzle; migrations in `drizzle/`) |
+| `lib/auth/` | passwords, TOTP, sessions, rate limits, audit |
+| `lib/posts.ts`, `lib/post-meta.ts`, `lib/seo.ts` | public data + Yoast-identical metadata/JSON-LD |
+| `lib/analytics.ts` | report queries |
+| `scripts/import-wp.ts`, `scripts/seo/*` | WordPress import, SEO snapshot/compare |

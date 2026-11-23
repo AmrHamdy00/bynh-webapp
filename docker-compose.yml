@@ -1,0 +1,12 @@
+# Local development database:  docker compose up -d db
+services:
+  db:
+    image: postgres:16.4-alpine
+    environment:
+      POSTGRES_USER: bynh
+      POSTGRES_PASSWORD: bynh_dev_pw
+      POSTGRES_DB: bynh
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+volumes:
+  pgdata:
