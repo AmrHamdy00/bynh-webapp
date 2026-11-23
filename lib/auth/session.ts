@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { and, eq, gt, lt, sql, count } from 'drizzle-orm';
 import { db, schema as s } from '@/lib/db';
 import { sha256, token } from './crypto';
+import { MFA_DISABLED } from './flags';
 
 /**
  * Admin sessions.
@@ -81,7 +82,7 @@ export async function requireUser(min: Role = 'author'): Promise<SessionUser> {
   if (!u) redirect('/admin/login/');
   if (u.stage === 'mfa') redirect('/admin/login/code/');
   if (u.stage === 'setup') redirect('/admin/setup-2fa/');
-  if (u.mustChangePassword && !((await headers()).get('x-admin-path') || '').startsWith('/admin/account')) redirect('/admin/account/?change=1');
+  if (!MFA_DISABLED && u.mustChangePassword && !((await headers()).get('x-admin-path') || '').startsWith('/admin/account')) redirect('/admin/account/?change=1');
   if (!can(u, min)) redirect('/admin/?denied=1');
   return u;
 }

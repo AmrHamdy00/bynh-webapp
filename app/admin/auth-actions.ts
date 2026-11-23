@@ -8,6 +8,7 @@ import { db, schema as s } from '@/lib/db';
 import { verifyPassword, hashPassword, passwordProblem } from '@/lib/auth/password';
 import { checkTotp, openSecret, newRecoveryCodes, normalizeRecovery } from '@/lib/auth/totp';
 import { sha256 } from '@/lib/auth/crypto';
+import { MFA_DISABLED } from '@/lib/auth/flags';
 import {
   currentSession, createSession, promoteSession, clientIp, audit, tooManyAttempts, recordAttempt,
   registerFailure, clearFailures, sweep, requireUser,
@@ -34,6 +35,12 @@ export async function loginAction(_: FormState, form: FormData): Promise<FormSta
   if (u.lockedUntil && u.lockedUntil > new Date()) { await audit(u.id, 'login_blocked_locked'); return { error: 'الحساب مقفل مؤقتاً بسبب محاولات خاطئة. حاول لاحقاً.' }; }
 
   await sweep();
+  if (MFA_DISABLED) {
+    await clearFailures(u.id);
+    await createSession(u.id, 'full');
+    await audit(u.id, 'login_without_2fa_staging');
+    return { go: '/admin/' };
+  }
   if (u.totpEnabled) { await createSession(u.id, 'mfa'); return { go: '/admin/login/code/' }; }
   await createSession(u.id, 'setup');
   await audit(u.id, 'login_password_ok_setup_required');

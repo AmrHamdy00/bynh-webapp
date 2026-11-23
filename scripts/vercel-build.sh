@@ -16,4 +16,6 @@ if [ -n "${ADMIN_BOOTSTRAP_USER:-}" ]; then
   USERS=$(npx tsx scripts/db-count.ts users)
   if [ "$USERS" = "0" ]; then npx tsx scripts/create-admin.ts "$ADMIN_BOOTSTRAP_USER" "${ADMIN_BOOTSTRAP_NAME:-Admin}" admin; fi
 fi
+# staging convenience login (only acts when STAGING=1 and STAGING_ADMIN_PASSWORD is set)
+npx tsx scripts/staging-admin.ts
 npx next build

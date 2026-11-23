@@ -1,5 +1,6 @@
 import { requireUser, can } from '@/lib/auth/session';
 import { SideNav } from './nav';
+import { MFA_DISABLED } from '@/lib/auth/flags';
 
 const ROLE = { admin: 'مدير', editor: 'محرر', author: 'كاتب' } as const;
 
@@ -25,7 +26,10 @@ export default async function Panel({ children }: { children: React.ReactNode })
     <div className="shell">
       <SideNav items={items} user={{ name: u.displayName, role: ROLE[u.role] }}
         logout={<form action="/api/admin/logout/" method="post"><button type="submit">تسجيل الخروج</button></form>} />
-      <main className="main">{children}</main>
+      <main className="main">
+        {MFA_DISABLED && <div className="msg warn">نسخة تجريبية: التحقق بخطوتين معطّل مؤقتاً (AUTH_DISABLE_2FA). لا تستخدم هذا الإعداد في الموقع الحقيقي.</div>}
+        {children}
+      </main>
     </div>
   );
 }
