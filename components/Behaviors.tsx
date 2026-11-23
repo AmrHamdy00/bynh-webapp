@@ -64,7 +64,7 @@ export default function Behaviors() {
       if (t) { e.preventDefault(); t.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth' }); history.replaceState(null, '', a.getAttribute('href')); }
     }));
 
-    /* registration form (التسجيل): validate; submission endpoint is wired at launch */
+    /* registration form (التسجيل): validate, then POST /api/forms/register/ */
     const rf = $<HTMLFormElement>('#regForm');
     if (rf) {
       on(rf, 'submit', (e) => {
@@ -77,7 +77,14 @@ export default function Behaviors() {
         });
         const err = $('#fErr'); if (err) err.hidden = ok;
         if (!ok) { $<HTMLElement>('[aria-invalid="true"]', rf)?.focus(); return; }
-        rf.hidden = true; const done = $('#regDone'); if (done) done.hidden = false;
+        const btn = $<HTMLButtonElement>('button[type=submit]', rf); if (btn) btn.disabled = true;
+        fetch('/api/forms/register/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.fromEntries(new FormData(rf))) })
+          .then((r) => {
+            if (btn) btn.disabled = false;
+            if (!r.ok) { if (err) err.hidden = false; return; }
+            window.dispatchEvent(new CustomEvent('bynh:form', { detail: 'register' }));
+            rf.hidden = true; const done = $('#regDone'); if (done) done.hidden = false;
+          }, () => { if (btn) btn.disabled = false; if (err) err.hidden = false; });
       });
       const again = $('#regAgain');
       if (again) on(again, 'click', () => { rf.reset(); $$('[aria-invalid]', rf).forEach((el) => el.removeAttribute('aria-invalid')); rf.hidden = false; const done = $('#regDone'); if (done) done.hidden = true; });

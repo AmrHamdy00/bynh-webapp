@@ -18,10 +18,11 @@ export default function RegisterPage() {
     <label className="field"><span>رقم الهاتف *</span><input id="f-phone" name="phone" type="tel" autoComplete="tel" dir="ltr" placeholder="رقم الهاتف*" required /></label>
     <label className="field"><span>الباقه *</span><select id="f-pkg" name="package" required><option value="">الباقه*</option><option>تأسيس الشركة (1350 ريال)</option><option>تأسيس وهيكلة الشركة (2650 ريال)</option></select></label>
     <label className="field full"><span>ملاحظات</span><textarea id="f-notes" name="notes" rows={5} placeholder="ملاحظات"></textarea></label>
+    <input type="text" name="website" tabIndex={-1} autoComplete="off" aria-hidden="true" style={{ position: 'absolute', left: '-9999px', width: 1, height: 1 }} />
     <p className="ferr" id="fErr" hidden role="alert">يرجى تعبئة الحقول المطلوبة (*) بشكل صحيح.</p>
     <div className="full"><button className="btn btn-p" type="submit">تسجيــل الطلب</button></div>
   </form>
-  <div className="rdone" id="regDone" hidden role="status"><span className="ic"><svg width="22" height="22"><use href="#i-check" /></svg></span><h2>تم استلام طلبك</h2><p className="sub" style={{ marginInline: 'auto' }}>نسخة تجريبية: سيتم ربط هذا النموذج بنظام الطلبات عند الإطلاق.</p><button type="button" className="btn btn-s" id="regAgain">طلب جديد</button></div>
+  <div className="rdone" id="regDone" hidden role="status"><span className="ic"><svg width="22" height="22"><use href="#i-check" /></svg></span><h2>تم استلام طلبك</h2><button type="button" className="btn btn-s" id="regAgain">طلب جديد</button></div>
 </div></section>
     </>
   );

@@ -72,6 +72,21 @@ export const getPost = unstable_cache(async (slug: string): Promise<Post | null>
   };
 }, ['post'], { tags: [POSTS_TAG], revalidate: 300 });
 
+/** Any post by id, whatever its status — for signed draft previews only (not cached). */
+export async function getPostForPreview(id: number): Promise<Post | null> {
+  const [r] = await db.select({ p: s.posts, m: s.media }).from(s.posts).leftJoin(s.media, eq(s.media.id, s.posts.coverMediaId)).where(eq(s.posts.id, id)).limit(1);
+  if (!r) return null;
+  const { p, m } = r;
+  const now = new Date().toISOString();
+  return {
+    id: p.id, slug: p.slug, title: p.title, excerpt: p.excerpt, content: p.content, seo: p.seo, schema: null, authorName: p.authorName,
+    readingMinutes: p.readingMinutes, date: day(p.publishedAt ?? new Date()), modified: day(p.modifiedAt),
+    publishedAt: p.publishedAt?.toISOString() ?? now, modifiedAt: p.modifiedAt.toISOString(), tags: (await tagMap([p.id])).get(p.id) || [], categories: [],
+    image: pick(m, 'large', 'medium_large', 'full'), imageSmall: pick(m, 'medium_large', 'medium', 'large'),
+    cover: m ? { path: m.path, width: m.width, height: m.height, mime: m.mime } : null,
+  };
+}
+
 /** Tags with live post counts. */
 export const getTags = unstable_cache(async () => {
   return db.select({ name: s.tags.name, slug: s.tags.slug, count: sql<number>`count(*)::int` }).from(s.tags)

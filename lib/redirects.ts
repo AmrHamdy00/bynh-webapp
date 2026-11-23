@@ -4,18 +4,19 @@ import { db, schema as s } from './db';
 
 /** In-memory copy of the redirects table (refreshed every 60 s and right after admin edits). */
 type R = { to: string; code: number };
-let cache: { at: number; map: Map<string, R> } | null = null;
-let loading: Promise<Map<string, R>> | null = null;
+// middleware and route code are separate bundles in the same process: share the cache through globalThis
+const g = globalThis as unknown as { __bynhRedirects?: { at: number; map: Map<string, R> } | null; __bynhRedirectsLoading?: Promise<Map<string, R>> | null };
 
-export function invalidateRedirects() { cache = null; }
+export function invalidateRedirects() { g.__bynhRedirects = null; }
 
 export async function redirectMap() {
-  if (cache && Date.now() - cache.at < 60_000) return cache.map;
-  loading ??= db.select({ from: s.redirects.fromPath, to: s.redirects.toPath, code: s.redirects.code }).from(s.redirects)
+  const c = g.__bynhRedirects;
+  if (c && Date.now() - c.at < 60_000) return c.map;
+  g.__bynhRedirectsLoading ??= db.select({ from: s.redirects.fromPath, to: s.redirects.toPath, code: s.redirects.code }).from(s.redirects)
     .then((rows) => new Map(rows.map((r) => [r.from, { to: r.to, code: r.code }])))
-    .finally(() => { loading = null; });
-  const map = await loading;
-  cache = { at: Date.now(), map };
+    .finally(() => { g.__bynhRedirectsLoading = null; });
+  const map = await g.__bynhRedirectsLoading;
+  g.__bynhRedirects = { at: Date.now(), map };
   return map;
 }
 
