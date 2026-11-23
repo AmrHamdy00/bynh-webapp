@@ -17,16 +17,18 @@ export function TrendChart({ data, metric, label, secondary }: {
   const [hover, setHover] = useState<number | null>(null);
   const ref = useRef<SVGSVGElement>(null);
   const vals = data.map((d) => Number(d[metric]) || 0);
-  const max = useMemo(() => {
+  // clean ticks: a 1/2/5 × 10^n step, about four intervals
+  const { max, step } = useMemo(() => {
     const m = Math.max(1, ...vals);
-    const step = 10 ** Math.floor(Math.log10(m));
-    return Math.ceil(m / step) * step;
+    const raw = m / 4, mag = 10 ** Math.floor(Math.log10(raw));
+    const st = Math.max(1, [1, 2, 5, 10].map((f) => f * mag).find((x) => x >= raw) || 10 * mag);
+    return { max: Math.ceil(m / st) * st, step: st };
   }, [vals]);
   const x = (i: number) => P.l + (data.length <= 1 ? 0 : (i * (W - P.l - P.r)) / (data.length - 1));
   const y = (v: number) => P.t + (H - P.t - P.b) * (1 - v / max);
   const line = vals.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join('');
   const area = `${line}L${x(vals.length - 1)},${y(0)}L${x(0)},${y(0)}Z`;
-  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(max * f));
+  const ticks = Array.from({ length: Math.round(max / step) + 1 }, (_, i) => i * step);
   const every = Math.max(1, Math.ceil(data.length / 8));
   const move = (e: React.PointerEvent) => {
     const r = ref.current!.getBoundingClientRect();
@@ -49,13 +51,15 @@ export function TrendChart({ data, metric, label, secondary }: {
           <circle cx={x(hover)} cy={y(vals[hover])} r={5} fill={C} stroke="#fff" strokeWidth={2} />
         </>}
         {/* labels are drawn un-mirrored */}
-        <g transform={`translate(${W},0) scale(-1,1)`} fontSize={11} fill="#7C93A0" fontFamily="var(--font)">
+        <g transform={`translate(${W},0) scale(-1,1)`} fontSize={11} fill="#7C93A0" fontFamily="var(--font)" style={{ direction: 'ltr' }}>
           {ticks.map((t) => <text key={t} x={W - P.l + 8} y={y(t) + 4} textAnchor="start">{fmt(t)}</text>)}
-          {data.map((d, i) => (i % every === 0 || i === data.length - 1 ? <text key={d.day} x={W - x(i)} y={H - 8} textAnchor="middle">{dayLabel(d.day)}</text> : null))}
+          {data.map((d, i) => ((i % every === 0 && data.length - 1 - i >= every / 2) || i === data.length - 1 ? <text key={d.day} x={W - x(i)} y={H - 8} textAnchor={i === 0 ? 'end' : i === data.length - 1 ? 'start' : 'middle'}>{dayLabel(d.day)}</text> : null))}
         </g>
       </svg>
       {h && (
-        <div className="tip" style={{ insetInlineStart: `calc(${(x(hover!) / W) * 100}% + 10px)` }}>
+        <div className="tip" style={(x(hover!) / W) < 0.6
+          ? { right: `calc(${(x(hover!) / W) * 100}% + 10px)` }        /* tooltip to the left of the point */
+          : { left: `calc(${(1 - x(hover!) / W) * 100}% + 10px)` }}>  {/* near the left edge: to its right */}
           <b>{dayLabel(h.day)}</b>
           <div>{label}: <span className="num">{fmt(Number(h[metric]))}</span></div>
           {secondary && <div className="muted">{secondary.label}: <span className="num">{fmt(Number(h[secondary.key]))}</span></div>}
