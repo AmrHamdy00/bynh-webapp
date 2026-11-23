@@ -22,7 +22,8 @@ const API = (process.env.WP_API_URL || 'https://bynh.sa/wp-json/wp/v2').replace(
 const ORIGIN = new URL(API).origin;
 const UPLOAD_DIR = process.env.UPLOAD_DIR || join(process.cwd(), 'storage/uploads');
 const DOWNLOAD = !process.argv.includes('--no-download');
-const client = postgres(process.env.DATABASE_URL || 'postgres://bynh:bynh_dev_pw@127.0.0.1:5432/bynh', { max: 4 });
+// direct (unpooled) connection when available, e.g. Neon on Vercel
+const client = postgres(process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL || 'postgres://bynh:bynh_dev_pw@127.0.0.1:5432/bynh', { max: 4 });
 const db = drizzle(client, { schema: s });
 
 async function api(path: string) {

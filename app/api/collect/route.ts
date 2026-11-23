@@ -35,7 +35,7 @@ export async function POST(req: Request) {
   const day = new Date().toISOString().slice(0, 10);
   const visitor = hmac(`visitor-${day}`, `${ip}|${ua}`).slice(0, 24);
   const info = uaInfo(ua, Number(b.w) || 0);
-  const country = (req.headers.get('cf-ipcountry') || req.headers.get('x-country-code') || '').slice(0, 2).toUpperCase() || null;
+  const country = (req.headers.get('x-vercel-ip-country') || req.headers.get('cf-ipcountry') || req.headers.get('x-country-code') || '').slice(0, 2).toUpperCase() || null;
   const rows = evs.filter((e: any) => e && TYPES.has(e.t)).map((e: any) => ({
     type: e.t as string, path, session, visitor, ...info, country,
     title: e.t === 'pageview' ? str(b.ti, 200) : null,

@@ -16,7 +16,7 @@ if (!username || !/^[a-z0-9._-]{3,32}$/i.test(username) || !displayName || !['ad
   console.error('usage: npm run admin:create -- <username> "<display name>" [admin|editor|author]'); process.exit(1);
 }
 async function main() {
-  const client = postgres(process.env.DATABASE_URL || 'postgres://bynh:bynh_dev_pw@127.0.0.1:5432/bynh', { max: 1 });
+  const client = postgres(process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL || 'postgres://bynh:bynh_dev_pw@127.0.0.1:5432/bynh', { max: 1 });
   const db = drizzle(client, { schema: s });
   const temp = randomBytes(18).toString('base64url') + '!7a';
   const passwordHash = await hash(temp, { algorithm: 2, memoryCost: 65536, timeCost: 3, parallelism: 1, outputLen: 32 });

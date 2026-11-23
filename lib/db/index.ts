@@ -9,6 +9,8 @@ const client = (g.__pg ??= postgres(process.env.DATABASE_URL || 'postgres://bynh
   max: Number(process.env.DATABASE_POOL || 10),
   idle_timeout: 30,
   connection: { application_name: 'bynh-web' },
+  // serverless (Vercel) uses a pooled URL (Neon "-pooler" / pgbouncer): no prepared statements there
+  prepare: !/pooler|pgbouncer=true/.test(process.env.DATABASE_URL || ''),
 }));
 export const db = drizzle(client, { schema });
 export { schema };

@@ -9,10 +9,17 @@ import { redirectMap, countHit, slugForWpId } from '@/lib/redirects';
 
 const ADMIN_PREFIX = '/admin';
 const BLOG = '/المدونة/';
-const isAdminHost = (host: string) => host.split(':')[0].startsWith('admin.');
+// admin.bynh.sa in production; on a test copy without subdomains set ADMIN_HOST (e.g. bynh-admin-staging.vercel.app)
+const isAdminHost = (host: string) => host.split(':')[0].startsWith('admin.') || (!!process.env.ADMIN_HOST && host === process.env.ADMIN_HOST);
+const STAGING = process.env.STAGING === '1';
+const noindex = (r: NextResponse) => { if (STAGING) r.headers.set('X-Robots-Tag', 'noindex, nofollow'); return r; };
 const enc = (p: string) => p.split('/').map((x) => encodeURIComponent(x)).join('/');
 
 export async function middleware(req: NextRequest) {
+  return noindex(await handle(req));
+}
+
+async function handle(req: NextRequest): Promise<NextResponse> {
   const url = req.nextUrl;
   const host = req.headers.get('host') || '';
   let path = url.pathname;
@@ -25,13 +32,14 @@ export async function middleware(req: NextRequest) {
     if (!ok) return new NextResponse('Not found', { status: 404 });
     // optional network allow-list, e.g. ADMIN_ALLOWED_IPS="203.0.113.4,198.51.100.0" (exact IPs, as seen by nginx)
     const allow = (process.env.ADMIN_ALLOWED_IPS || '').split(',').map((x) => x.trim()).filter(Boolean);
-    if (allow.length && !allow.includes(req.headers.get('x-real-ip') || '')) return new NextResponse('Forbidden', { status: 403 });
+    const ip = req.headers.get('x-real-ip') || req.headers.get('x-forwarded-for')?.split(',')[0].trim() || '';
+    if (allow.length && !allow.includes(ip)) return new NextResponse('Forbidden', { status: 403 });
     // strict CSP with a per-request nonce: no inline or third-party script can run in the dashboard
     const nonce = btoa(crypto.randomUUID());
     const dev = process.env.NODE_ENV !== 'production';
     const csp = [
       "default-src 'self'", `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${dev ? " 'unsafe-eval'" : ''}`, "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob:", "font-src 'self'", `connect-src 'self'${dev ? ' ws:' : ''}`, "frame-ancestors 'none'", "base-uri 'none'",
+      `img-src 'self' data: blob: https://*.public.blob.vercel-storage.com${process.env.MEDIA_FALLBACK_ORIGIN ? ' ' + process.env.MEDIA_FALLBACK_ORIGIN : ''}`, "font-src 'self'", `connect-src 'self'${dev ? ' ws:' : ''}`, "frame-ancestors 'none'", "base-uri 'none'",
       "form-action 'self'", "object-src 'none'", ...(dev ? [] : ['upgrade-insecure-requests']),
     ].join('; ');
     const reqHeaders = new Headers(req.headers);

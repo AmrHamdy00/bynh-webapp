@@ -1,6 +1,7 @@
 /**
  * Serves uploaded media at the same addresses WordPress used (/wp-content/uploads/YYYY/MM/file.ext).
  * In production nginx serves UPLOAD_DIR directly (faster); this handler is the fallback and the dev server path.
+ * MEDIA_FALLBACK_ORIGIN (e.g. https://bynh.sa): files not on disk are redirected there — used by the staging copy.
  */
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
@@ -30,5 +31,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ path: s
         ...(type === 'image/svg+xml' ? { 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox" } : {}),
       },
     });
-  } catch { return new Response('Not found', { status: 404 }); }
+  } catch {
+    // test copies without the media folder (e.g. Vercel staging) load images from the live site
+    const origin = process.env.MEDIA_FALLBACK_ORIGIN;
+    if (origin) return Response.redirect(`${origin.replace(/\/$/, '')}/wp-content/uploads/${parts.map(encodeURIComponent).join('/')}`, 302);
+    return new Response('Not found', { status: 404 });
+  }
 }

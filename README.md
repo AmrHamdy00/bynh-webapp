@@ -89,6 +89,26 @@ stored, Do-Not-Track/GPC honoured.
    «روابط مكسورة» daily for a few weeks.
 7. Updates: `scripts/deploy.sh`. Backups: `scripts/backup.sh` nightly (database + uploads).
 
+## Staging copy on Vercel (test before going live, without touching bynh.sa)
+
+Runs on `*.vercel.app` addresses only: bynh.sa is never added to Vercel, DNS is untouched, WordPress is only read (public API).
+`STAGING=1` makes every page `noindex` and `robots.txt` block all crawlers; canonical URLs keep pointing to bynh.sa.
+Images are not copied: `MEDIA_FALLBACK_ORIGIN=https://bynh.sa` sends `/wp-content/uploads/…` requests to the live site.
+
+1. vercel.com → **Add New → Project** → import the GitHub repo `AmrHamdy00/bynh-webapp` (framework: Next.js; `vercel.json` sets the build).
+2. Project → **Storage**: create a **Neon Postgres** database (region Frankfurt, matches `fra1`) and a **Blob** store, both connected to the project
+   (they add `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `BLOB_READ_WRITE_TOKEN`).
+3. Project → **Settings → Environment Variables** (Production):
+   `STAGING=1` · `APP_SECRET=<openssl rand -base64 48>` · `SITE_URL=https://bynh.sa` · `PUBLIC_ORIGIN=https://<project>.vercel.app` ·
+   `MEDIA_FALLBACK_ORIGIN=https://bynh.sa` · `ADMIN_HOST=<project>-admin.vercel.app` · `TRUST_PROXY=1` · `ADMIN_BOOTSTRAP_USER=<username>` ·
+   `ADMIN_BOOTSTRAP_NAME=<name>`
+4. Project → **Settings → Domains**: add a second free domain `<project>-admin.vercel.app` (the dashboard host).
+5. **Deploy.** The first build migrates the empty database, imports all posts + SEO from bynh.sa and creates the bootstrap admin —
+   its temporary password is printed in the build log (sign-in forces a new password + authenticator). Then remove `ADMIN_BOOTSTRAP_*`.
+6. Optional: **Settings → Deployment Protection** to put the whole copy behind Vercel login or a password.
+
+Limits of the staging copy: uploads ≤ 4.5 MB (Vercel request limit), rate limits are per serverless instance, data lives in Frankfurt.
+
 ## Code map
 
 | Path | What |

@@ -1,8 +1,28 @@
 import 'server-only';
+import { like } from 'drizzle-orm';
 import sharp, { type Metadata as SharpMeta, type Sharp } from 'sharp';
 import { mkdir, writeFile, access, unlink } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
+import { put, del } from '@vercel/blob';
 import { db, schema as s } from './db';
+
+/**
+ * Where uploads go: the local folder (own server, served by nginx at /wp-content/uploads/…), or Vercel Blob when
+ * BLOB_READ_WRITE_TOKEN is set (Vercel has no persistent disk). Blob files keep the same YYYY/MM/name layout.
+ */
+const BLOB = !!process.env.BLOB_READ_WRITE_TOKEN;
+async function save(rel: string, data: Buffer, contentType: string): Promise<string> {
+  if (BLOB) {
+    const b = await put(`wp-content/uploads/${rel}`, data, { access: 'public', contentType, addRandomSuffix: false, allowOverwrite: false });
+    return b.url;
+  }
+  await writeFile(join(UPLOAD_ROOT, rel), data, { mode: 0o644 });
+  return `/wp-content/uploads/${rel}`;
+}
+const taken = async (rel: string) => {
+  if (BLOB) return (await db.select({ id: s.media.id }).from(s.media).where(like(s.media.path, `%/wp-content/uploads/${rel}`)).limit(1)).length > 0;
+  return exists(join(UPLOAD_ROOT, rel));
+};
 import type { MediaSize } from './db/schema';
 
 export const UPLOAD_ROOT = resolve(process.env.UPLOAD_DIR || join(process.cwd(), 'storage/uploads'));
@@ -23,14 +43,14 @@ export async function storeUpload(file: File, alt: string, userId: number) {
   const buf = Buffer.from(await file.arrayBuffer());
   const now = new Date();
   const dir = `${now.getUTCFullYear()}/${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
-  await mkdir(join(UPLOAD_ROOT, dir), { recursive: true });
+  if (!BLOB) await mkdir(join(UPLOAD_ROOT, dir), { recursive: true });
   let base = baseName(file.name);
   const isPdf = buf.subarray(0, 5).toString('latin1') === '%PDF-';
 
   if (isPdf) {
-    while (await exists(join(UPLOAD_ROOT, dir, `${base}.pdf`))) base += '-1';
-    await writeFile(join(UPLOAD_ROOT, dir, `${base}.pdf`), buf, { mode: 0o644 });
-    const [m] = await db.insert(s.media).values({ path: `/wp-content/uploads/${dir}/${base}.pdf`, mime: 'application/pdf', bytes: buf.length, alt, title: file.name, uploadedBy: userId }).returning();
+    while (await taken(`${dir}/${base}.pdf`)) base += '-1';
+    const url = await save(`${dir}/${base}.pdf`, buf, 'application/pdf');
+    const [m] = await db.insert(s.media).values({ path: url, mime: 'application/pdf', bytes: buf.length, alt, title: file.name, uploadedBy: userId }).returning();
     return m;
   }
 
@@ -39,30 +59,31 @@ export async function storeUpload(file: File, alt: string, userId: number) {
   const fmt = meta.format === 'jpeg' || meta.format === 'png' || meta.format === 'webp' || meta.format === 'gif' ? meta.format : null;
   if (!fmt) throw new Error('نوع الملف غير مدعوم. المسموح: JPG, PNG, WebP, GIF, PDF.');
   const ext = fmt === 'jpeg' ? 'jpg' : fmt;
-  while (await exists(join(UPLOAD_ROOT, dir, `${base}.${ext}`))) base += '-1';
+  while (await taken(`${dir}/${base}.${ext}`)) base += '-1';
 
   const encode = (img: Sharp) => (fmt === 'jpeg' ? img.jpeg({ quality: 82, mozjpeg: true }) : fmt === 'png' ? img.png({ compressionLevel: 9 })
     : fmt === 'webp' ? img.webp({ quality: 82 }) : img.gif());
   const src = () => sharp(buf, { animated: fmt === 'gif', limitInputPixels: 40_000_000 }).rotate();
   const main = await encode(src().resize({ width: 2560, withoutEnlargement: true })).toBuffer({ resolveWithObject: true });
-  await writeFile(join(UPLOAD_ROOT, dir, `${base}.${ext}`), main.data, { mode: 0o644 });
+  const mainUrl = await save(`${dir}/${base}.${ext}`, main.data, `image/${fmt}`);
   const sizes: Record<string, MediaSize> = {};
   for (const [name, w, h] of SIZES) {
     if (main.info.width <= w && !h) continue;
     const out = await encode(src().resize(h ? { width: w, height: h, fit: 'cover' } : { width: w, withoutEnlargement: true })).toBuffer({ resolveWithObject: true });
     const file2 = `${base}-${out.info.width}x${out.info.height}.${ext}`;
-    await writeFile(join(UPLOAD_ROOT, dir, file2), out.data, { mode: 0o644 });
-    sizes[name] = { path: `/wp-content/uploads/${dir}/${file2}`, width: out.info.width, height: out.info.height };
+    sizes[name] = { path: await save(`${dir}/${file2}`, out.data, `image/${fmt}`), width: out.info.width, height: out.info.height };
   }
   const [m] = await db.insert(s.media).values({
-    path: `/wp-content/uploads/${dir}/${base}.${ext}`, mime: `image/${fmt}`, width: main.info.width, height: main.info.height, bytes: main.data.length,
+    path: mainUrl, mime: `image/${fmt}`, width: main.info.width, height: main.info.height, bytes: main.data.length,
     alt, title: file.name.slice(0, 200), sizes, uploadedBy: userId,
   }).returning();
   return m;
 }
 
 export async function deleteFiles(paths: string[]) {
-  for (const p of paths) {
+  const blobs = paths.filter((p) => /^https:\/\//.test(p));
+  if (blobs.length && BLOB) await del(blobs).catch(() => {});
+  for (const p of paths.filter((x) => x.startsWith('/'))) {
     const f = resolve(UPLOAD_ROOT, p.replace(/^\/wp-content\/uploads\//, ''));
     if (f.startsWith(UPLOAD_ROOT + '/')) await unlink(f).catch(() => {});
   }

@@ -8,7 +8,7 @@ import { SITE_URL, encPath, postPath } from './content';
 
 const xml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const iso = (d: Date) => d.toISOString().replace(/\.\d{3}Z$/, '+00:00');
-const abs = (p: string) => SITE_URL + encPath(p);
+const abs = (p: string) => (/^https?:\/\//.test(p) ? p : SITE_URL + encPath(p));
 const XML_HEADERS = { 'Content-Type': 'application/xml; charset=utf-8', 'X-Robots-Tag': 'noindex, follow', 'Cache-Control': 'public, max-age=300' };
 
 const livePosts = unstable_cache(async () => {
