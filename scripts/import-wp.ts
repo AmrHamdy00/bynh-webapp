@@ -16,6 +16,7 @@ import { sql } from 'drizzle-orm';
 import { mkdir, stat, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import * as s from '../lib/db/schema';
+import { dbUrl, isPooled } from '../lib/db/url';
 import { rewriteHtml, yoastToSeo, decodeEntities, stripTags } from '../lib/content';
 
 const API = (process.env.WP_API_URL || 'https://bynh.sa/wp-json/wp/v2').replace(/\/$/, '');
@@ -23,7 +24,7 @@ const ORIGIN = new URL(API).origin;
 const UPLOAD_DIR = process.env.UPLOAD_DIR || join(process.cwd(), 'storage/uploads');
 const DOWNLOAD = !process.argv.includes('--no-download');
 // direct (unpooled) connection when available, e.g. Neon on Vercel
-const client = postgres(process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL || 'postgres://bynh:bynh_dev_pw@127.0.0.1:5432/bynh', { max: 4 });
+const client = postgres(dbUrl(true), { max: 4, prepare: !isPooled(dbUrl(true)) });
 const db = drizzle(client, { schema: s });
 
 async function api(path: string) {

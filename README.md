@@ -96,8 +96,8 @@ Runs on `*.vercel.app` addresses only: bynh.sa is never added to Vercel, DNS is 
 Images are not copied: `MEDIA_FALLBACK_ORIGIN=https://bynh.sa` sends `/wp-content/uploads/…` requests to the live site.
 
 1. vercel.com → **Add New → Project** → import the GitHub repo `AmrHamdy00/bynh-webapp` (framework: Next.js; `vercel.json` sets the build).
-2. Project → **Storage**: create a **Neon Postgres** database (region Frankfurt, matches `fra1`) and a **Blob** store, both connected to the project
-   (they add `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `BLOB_READ_WRITE_TOKEN`).
+2. Project → **Storage**: create a Postgres database (Neon or Supabase, region Frankfurt, matches `fra1`) and a **Blob** store, both connected
+   to the project. Their variables are read as-is (`DATABASE_URL`/`POSTGRES_URL`, `…_UNPOOLED`/`POSTGRES_URL_NON_POOLING`, `BLOB_READ_WRITE_TOKEN`).
 3. Project → **Settings → Environment Variables** (Production):
    `STAGING=1` · `APP_SECRET=<openssl rand -base64 48>` · `SITE_URL=https://bynh.sa` · `PUBLIC_ORIGIN=https://<project>.vercel.app` ·
    `MEDIA_FALLBACK_ORIGIN=https://bynh.sa` · `ADMIN_HOST=<project>-admin.vercel.app` · `TRUST_PROXY=1` · `ADMIN_BOOTSTRAP_USER=<username>` ·
