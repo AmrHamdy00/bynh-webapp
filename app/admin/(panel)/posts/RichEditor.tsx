@@ -1,15 +1,10 @@
 'use client';
 import { useEditor, EditorContent, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import Link from '@tiptap/extension-link';
 import Image from '@tiptap/extension-image';
 import TextAlign from '@tiptap/extension-text-align';
-import Underline from '@tiptap/extension-underline';
-import Placeholder from '@tiptap/extension-placeholder';
-import Table from '@tiptap/extension-table';
-import TableRow from '@tiptap/extension-table-row';
-import TableCell from '@tiptap/extension-table-cell';
-import TableHeader from '@tiptap/extension-table-header';
+import { Placeholder } from '@tiptap/extensions';
+import { TableKit } from '@tiptap/extension-table';
 import { useEffect, useState } from 'react';
 import { MediaPicker, type MediaItem } from './MediaPicker';
 
@@ -25,20 +20,19 @@ export default function RichEditor({ name, initialHtml }: { name: string; initia
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
-      StarterKit.configure({ heading: { levels: [2, 3, 4] } }),
-      Underline,
-      Link.configure({ openOnClick: false, autolink: true, HTMLAttributes: { rel: null, target: null } }),
+      // v3 StarterKit includes Underline and Link
+      StarterKit.configure({ heading: { levels: [2, 3, 4] }, link: { openOnClick: false, autolink: true, HTMLAttributes: { rel: null, target: null } } }),
       Image.configure({ HTMLAttributes: { loading: 'lazy' } }),
       TextAlign.configure({ types: ['heading', 'paragraph'], defaultAlignment: 'right' }),
       Placeholder.configure({ placeholder: 'اكتب المقال هنا…' }),
-      Table.configure({ resizable: false }), TableRow, TableHeader, TableCell,
+      TableKit.configure({ table: { resizable: false } }),
     ],
     content: initialHtml,
     editorProps: { attributes: { class: 'prose-ed', dir: 'rtl' } },
     onUpdate: ({ editor: e }) => { setDirty(true); setHtml(e.getHTML()); },
   });
 
-  useEffect(() => { if (mode === 'visual' && editor && dirty) editor.commands.setContent(html, false); }, [mode]); // eslint-disable-line
+  useEffect(() => { if (mode === 'visual' && editor && dirty) editor.commands.setContent(html, { emitUpdate: false }); }, [mode]); // eslint-disable-line
 
   const words = html.replace(/<[^>]+>/g, ' ').split(/\s+/).filter(Boolean).length;
   return (

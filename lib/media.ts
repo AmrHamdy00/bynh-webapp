@@ -1,5 +1,5 @@
 import 'server-only';
-import sharp from 'sharp';
+import sharp, { type Metadata as SharpMeta, type Sharp } from 'sharp';
 import { mkdir, writeFile, access, unlink } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { db, schema as s } from './db';
@@ -34,14 +34,14 @@ export async function storeUpload(file: File, alt: string, userId: number) {
     return m;
   }
 
-  let meta: sharp.Metadata;
+  let meta: SharpMeta;
   try { meta = await sharp(buf, { limitInputPixels: 40_000_000 }).metadata(); } catch { throw new Error('نوع الملف غير مدعوم. المسموح: JPG, PNG, WebP, GIF, PDF.'); }
   const fmt = meta.format === 'jpeg' || meta.format === 'png' || meta.format === 'webp' || meta.format === 'gif' ? meta.format : null;
   if (!fmt) throw new Error('نوع الملف غير مدعوم. المسموح: JPG, PNG, WebP, GIF, PDF.');
   const ext = fmt === 'jpeg' ? 'jpg' : fmt;
   while (await exists(join(UPLOAD_ROOT, dir, `${base}.${ext}`))) base += '-1';
 
-  const encode = (img: sharp.Sharp) => (fmt === 'jpeg' ? img.jpeg({ quality: 82, mozjpeg: true }) : fmt === 'png' ? img.png({ compressionLevel: 9 })
+  const encode = (img: Sharp) => (fmt === 'jpeg' ? img.jpeg({ quality: 82, mozjpeg: true }) : fmt === 'png' ? img.png({ compressionLevel: 9 })
     : fmt === 'webp' ? img.webp({ quality: 82 }) : img.gif());
   const src = () => sharp(buf, { animated: fmt === 'gif', limitInputPixels: 40_000_000 }).rotate();
   const main = await encode(src().resize({ width: 2560, withoutEnlargement: true })).toBuffer({ resolveWithObject: true });
