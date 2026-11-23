@@ -23,7 +23,23 @@ export async function middleware(req: NextRequest) {
     if (path === '/' ) return NextResponse.redirect(new URL('/admin/', url));
     const ok = path.startsWith(ADMIN_PREFIX + '/') || path === ADMIN_PREFIX || path.startsWith('/api/admin/') || path.startsWith('/_next/') || path.startsWith('/img/') || path.startsWith('/wp-content/') || path === '/favicon.ico';
     if (!ok) return new NextResponse('Not found', { status: 404 });
-    const res = NextResponse.next();
+    // optional network allow-list, e.g. ADMIN_ALLOWED_IPS="203.0.113.4,198.51.100.0" (exact IPs, as seen by nginx)
+    const allow = (process.env.ADMIN_ALLOWED_IPS || '').split(',').map((x) => x.trim()).filter(Boolean);
+    if (allow.length && !allow.includes(req.headers.get('x-real-ip') || '')) return new NextResponse('Forbidden', { status: 403 });
+    // strict CSP with a per-request nonce: no inline or third-party script can run in the dashboard
+    const nonce = btoa(crypto.randomUUID());
+    const dev = process.env.NODE_ENV !== 'production';
+    const csp = [
+      "default-src 'self'", `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${dev ? " 'unsafe-eval'" : ''}`, "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob:", "font-src 'self'", `connect-src 'self'${dev ? ' ws:' : ''}`, "frame-ancestors 'none'", "base-uri 'none'",
+      "form-action 'self'", "object-src 'none'", ...(dev ? [] : ['upgrade-insecure-requests']),
+    ].join('; ');
+    const reqHeaders = new Headers(req.headers);
+    reqHeaders.set('x-nonce', nonce);
+    reqHeaders.set('content-security-policy', csp);
+    reqHeaders.set('x-admin-path', path);
+    const res = NextResponse.next({ request: { headers: reqHeaders } });
+    res.headers.set('Content-Security-Policy', csp);
     res.headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
     res.headers.set('X-Frame-Options', 'DENY');
     res.headers.set('Cache-Control', 'no-store');
